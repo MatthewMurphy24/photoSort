@@ -1,0 +1,206 @@
+----STEP ONE-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+**Upload folder from iPhone**
+
+extract.cs
+ - Takes in folder location
+ - Returns a table containing info for each file in the folder
+
+    For each file:
+        - If file is not an image → IGNORE
+        - Extract metadata from image
+        - If Longitude/Latitude exists:
+            → Use OpenCage Geocoding API to convert to Location (City, Country)
+        - Determine:
+            → Selfie (based on LensModel)
+            → Screenshot (based on resolution/metadata)
+
+    __TABLE____________________________________________________
+    | FileName            | Unique ID                         |
+    | Location            | City, Country                     |
+    | DateTimeOriginal    | Date, Hour                        |
+    | Model               | iPhone model used                 |
+    | Selfie              | true/false                        |
+    | Screenshot          | true/false                        |
+    ___________________________________________________________
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+----STEP TWO-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+photoSort.cs
+ - Runs in terminal
+ - Sorts given folder of photos into new subfolders based on user input
+
+    1. Prompt user for folder location
+    2. Call extract.cs → build table
+
+    3. Analyze table and display summary:
+        - Date distribution
+        - Model distribution
+        - % Selfie / Screenshot / Photograph
+        - Top 5 countries and cities
+
+    4. Prompt user:
+
+        (A) Set Date Ranges
+            - User can define custom ranges:
+                Example:
+                [09/01/2022 - 06/31/2023 = "FRESHMAN YEAR"]
+            - Multiple ranges allowed
+            - Overlapping ranges → use most recently defined
+            - User may also define fixed recurring ranges:
+                Example:
+                [10/31 - 11/01 = "HALLOWEEN"]
+                [12/23 - 12/27 = "CHRISTMAS"]
+
+        (B) Select Sort Priority
+            - User defines order of categories:
+                (leave blank → Gemini decides)
+
+                1: Year 
+                2: Month 
+                3: Date Range
+                4: Location 
+                   (City inside Country unless only one city → "Country, City")
+                5: Model
+                6: Photo Type (Selfie, Screenshot, Photograph)
+
+            Example inputs:
+                "214", "", "1"
+
+            - If no input → call geminiSort.cs
+
+    5. Apply default date ranges if none provided
+
+    6. Determine Which Folders Will Need to be Created
+        - Decide folder structure and names based on user input so files can be moved safely
+        - Use the table from extract.cs
+            - Each row contains: DateTimeOriginal, Location (City, Country), iPhone Model, Selfie/Screenshot flags, custom date ranges
+        - Apply user-defined sorting rules
+            - Take the sort priority order (example: "214")
+            - Map each number to the corresponding metadata field:
+                1: Year (from DateTimeOriginal)
+                2: Month
+                3: Date Range Label
+                4: Location (City inside Country unless only one city → "Country, City")
+                5: Model
+                6: Photo Type (Selfie, Screenshot, Photograph)
+            - Sort table rows according to this priority
+        - Decide folder names for each level
+            - Year → "2022"
+            - Month → "04" or "April"
+            - Date Range → "FRESHMAN YEAR"
+            - Location → "Country, City" (or just "Country" if only one city)
+            - Model → "iPhone 14 Pro"
+            - Photo Type → "Selfie", "Screenshot", "Photograph"
+        - Create a folder tree in memory
+            - Each folder is a node in a tree
+            - Leaf nodes hold a list of files for that folder
+            - Example:
+                FRESHMAN YEAR/
+                    Japan, Kyoto/
+                        IMG_001.jpg
+                        IMG_002.jpg
+                    Japan, Tokyo/
+                        IMG_003.jpg
+                SENIOR YEAR/
+                    United States, Richmond/
+                        IMG_004.jpg
+                        IMG_005.jpg
+        - Check for conflicts / duplicates
+            - Ensure two files don’t map to the same folder with the same name (rename if needed)
+            - Combine empty categories as "Other" if a photo is missing metadata
+        - Pass this folder tree to Step 7 for preview before creating folders
+
+    7. Display folder structure preview:
+
+        Example:
+
+        Christmas 2021
+            United States, Richmond
+                IMG001.jpg
+                IMG002.jpg
+
+        SENIOR YEAR
+            United States
+                Richmond
+                    IMG003.jpg
+                    IMG004.jpg
+                    ... 8 more
+
+                Polk
+                    IMG005.jpg
+
+        FRESHMAN YEAR
+            Japan
+                Kyoto
+                    IMG006.jpg
+                    IMG007.jpg
+                    ... 112 more
+
+        Other
+            2021
+                United States
+                    Richmond
+                        IMG008.jpg
+                        ... 15 more
+
+                    New York
+                        IMG009.jpg
+
+                Mexico, Mexico City
+                    IMG010.jpg
+                    ... 2 more
+
+                Other
+                    IMG011.jpg
+                    ... 105 more
+
+            2022
+                United States
+                    Richmond
+                        IMG012.jpg
+                        IMG013.jpg
+
+    8. Propmt User to move files
+        [Y] : Call fileMover.cs
+        [N] : Prompt user
+            [1] : Set New Date
+            [2] : Change Folder Order
+            [3] : Quit
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------              
+
+----STEP THREE---------------------------------------------------------------------------------------------------------------------------------------------------------
+
+1. Read the in-memory folder tree from Step 6
+    - Each node = folder to create
+    - Leaf nodes = list of files to move
+
+2. For each folder in the tree:
+    - Check if folder exists using `[[ -d "$folderPath" ]]`
+    - If not, create folder using `mkdir -p "$folderPath"`
+
+3. For each file in a leaf folder:
+    - Check if file already exists in target folder
+        - If yes, rename file (e.g., append "_1" or unique ID)
+    - Move file using `mv "$sourcePath" "$targetFolderPath"`
+
+4. Optional: Confirm each move or do dry-run
+    - Dry-run: `echo "Would move $sourcePath → $targetFolderPath"`
+    - Real move: uncomment `mv` command
+
+5. After moving all files:
+    - Print summary:
+        - Total files moved
+        - Folders created
+        - Any duplicate files renamed
+
+6. Optional cleanup:
+    - Remove empty folders from original location using `find "$sourceRoot" -type d -empty -delete`
+    - Verify all files exist in new structure
+
+7. End
+    - Notify user: "All files have been organized according to your preferences"

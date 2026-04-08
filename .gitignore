@@ -1,0 +1,10 @@
+# Ignore environment/config files with secrets
+.env
+appsettings.Development.json
+secrets.json
+
+# Common ignores for .NET projects
+bin/
+obj/
+*.user
+*.suo
